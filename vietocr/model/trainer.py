@@ -10,6 +10,7 @@ from vietocr.loader.aug import ImgAugTransform
 
 import yaml
 import torch
+import torchmetrics
 from vietocr.loader.dataloader_v1 import DataGen
 from vietocr.loader.dataloader import OCRDataset, ClusterRandomSampler, Collator
 from torch.utils.data import DataLoader
@@ -82,6 +83,9 @@ class Trainer():
                     self.data_root, self.valid_annotation, masked_language_model=False)
 
         self.train_losses = []
+        # validation metrics
+        self.cer = torchmetrics.CharErrorRate()
+        self.wer = torchmetrics.WordErrorRate()
         
     def train(self):
         total_loss = 0
@@ -124,9 +128,13 @@ class Trainer():
 
             if self.valid_annotation and self.iter % self.valid_every == 0:
                 val_loss = self.validate()
-                acc_full_seq, acc_per_char = self.precision(self.metrics)
+                scores = self.precision(self.metrics)
+                acc_full_seq = scores['acc_full_seq']
 
-                info = 'iter: {:06d} - valid loss: {:.3f} - acc full seq: {:.4f} - acc per char: {:.4f}'.format(self.iter, val_loss, acc_full_seq, acc_per_char)
+                info = 'iter: {:06d} - valid loss: {:.3f} - acc full seq: {:.4f} - acc per char: {:.4f} - CER: {:.4f} - WER: {:.4f}'.format(
+                    self.iter, val_loss,
+                    scores["acc_full_seq"], scores["acc_per_char"],
+                    scores["cer"], scores["wer"])
                 print(info)
                 self.logger.log(info)
 
@@ -195,8 +203,15 @@ class Trainer():
 
         acc_full_seq = compute_accuracy(actual_sents, pred_sents, mode='full_sequence')
         acc_per_char = compute_accuracy(actual_sents, pred_sents, mode='per_char')
+        cer = self.cer(pred_sents, actual_sents)
+        wer = self.wer(pred_sents, actual_sents)
     
-        return acc_full_seq, acc_per_char
+        # return acc_full_seq, acc_per_char
+        return {"acc_full_seq": acc_full_seq,
+                "acc_per_char": acc_per_char,
+                "wer": wer.item(),
+                "cer": cer.item()
+                }
     
     def visualize_prediction(self, sample=16, errorcase=False, fontname='serif', fontsize=16):
         
