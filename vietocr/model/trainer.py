@@ -29,6 +29,10 @@ import time
 class Trainer():
     def __init__(self, config, pretrained=True, augmentor=ImgAugTransform()):
 
+        #train_loss, test_loss are used for plotting after training
+        self.train_loss = []
+        self.test_loss = []
+
         self.config = config
         self.model, self.vocab = build_model(config)
         
@@ -73,6 +77,7 @@ class Trainer():
         self.criterion = LabelSmoothingLoss(len(self.vocab), padding_idx=self.vocab.pad, smoothing=0.1)
         
         transforms = None
+        #image augmentation
         if self.image_aug:
             transforms =  augmentor
 
@@ -115,6 +120,8 @@ class Trainer():
             total_loss += loss
             self.train_losses.append((self.iter, loss))
 
+            self.train_losses.append(loss)
+
             if self.iter % self.print_every == 0:
                 info = 'iter: {:06d} - train loss: {:.3f} - lr: {:.2e} - load time: {:.2f} - gpu time: {:.2f}'.format(self.iter, 
                         total_loss/self.print_every, self.optimizer.param_groups[0]['lr'], 
@@ -128,6 +135,7 @@ class Trainer():
 
             if self.valid_annotation and self.iter % self.valid_every == 0:
                 val_loss = self.validate()
+                self.test_loss.append(val_loss)
                 scores = self.precision(self.metrics)
                 acc_full_seq = scores['acc_full_seq']
 
@@ -141,6 +149,8 @@ class Trainer():
                 if acc_full_seq > best_acc:
                     self.save_weights(self.export_weights)
                     best_acc = acc_full_seq
+            else:
+                self.test_loss.append(None)
 
             
     def validate(self):
@@ -376,3 +386,14 @@ class Trainer():
         loss_item = loss.item()
 
         return loss_item
+    
+    def plot_loss(self):
+        if (len(self.train_loss) == 0 or len(self.train_loss) != len(self.test_loss) or self.iter == 0):
+            print('Missing losses')
+            return
+        plt.plot(self.iter, self.train_loss, color='blue', label='Training loss')
+        plt.plot(self.iter, self.test_loss, color='red', label='Testing loss')
+        plt.xlabel('Iterations')
+        plt.ylabel('Loss')
+        plt.legend()
+        plt.show()
