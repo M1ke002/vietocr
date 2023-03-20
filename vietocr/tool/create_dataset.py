@@ -39,12 +39,14 @@ def createDataset(outputPath, root_dir, annotation_path):
     """
 
     annotation_path = os.path.join(root_dir, annotation_path)
+    # with open(annotation_path, 'r', encoding='utf8') as ann_file:
     with open(annotation_path, 'r') as ann_file:
         lines = ann_file.readlines()
         annotations = [l.strip().split('\t') for l in lines]
 
     nSamples = len(annotations)
     env = lmdb.open(outputPath, map_size=1099511627776)
+    # env = lmdb.open(outputPath, map_size=1073741824)
     cache = {}
     cnt = 0
     error = 0
